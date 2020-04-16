@@ -23,15 +23,51 @@ function plugin:access(plugin_conf)
   plugin.super.access(self)
 
   -- your custom code here
-  local pattern = plugin_conf.pattern
-  local token = kong.request.get_header("x-abtest-token")
+  local limit_cookie = plugin_conf.cookie
+  local limit_header = plugin_conf.header
+  local limit_ip = plugin_conf.ip
+  local matched=true 
 
-  if token == nil then
-  
-    return 
+  -- 客户端Cookie灰度标识
+  local client_cookie = ngx.var.cookie_abtesting
+  -- 客户端请求的灰度标识
+  local client_header = kong.request.get_header("X-abtesting")
+  -- 客户端IP
+  local client_ip = ngx.req.get_headers()["X-Real-IP"]
+  if client_ip == nil then
+    client_ip = ngx.req.get_headers()["x_forworded_for"]
   end
-  -- 忽略大小写
-  local matched = ngx.re.match(token, pattern, "joi")
+  if client_ip == nil then
+    client_ip = ngx.var.remote_addr
+  end
+ 
+  if(limit_header~=nil) then  
+    if(client_header~=nil) then    
+      -- 忽略大小写匹配请求头
+     matched = ngx.re.match(client_header, limit_header, "joi")
+    else
+      matched=false;
+    end  
+  end
+  
+  if(matched and limit_cookie~=nil) then
+    if(client_cookie~=nil) then
+    -- 忽略大小写匹配cookie
+    matched = ngx.re.match(client_cookie, limit_cookie, "joi")
+    else
+      matched=false
+    end
+  end
+
+  if(matched and limit_ip~=nil) then
+    if(client_ip~=nil) then
+    -- 忽略大小写匹配ip
+    matched = ngx.re.match(client_ip, limit_ip, "joi")
+    else
+      matched=false
+    end
+  end
+
   if matched then
     -- 设置upstream
     local ok, err = kong.service.set_upstream(plugin_conf.upstream)
@@ -40,8 +76,25 @@ function plugin:access(plugin_conf)
         return
     end
     -- 匹配成功添加特定头部方便监控
-    ngx.req.set_header("X-Kong-" .. plugin_name .. "-upstream", plugin_conf.upstream)
-    ngx.req.set_header("X-Kong-" .. plugin_name .. "-pattern", plugin_conf.pattern)
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-upstream", plugin_conf.upstream)      
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-limit-ip", limit_ip)
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-limit-header", limit_header)
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-limit-cookie", limit_cookie)  
+
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-client-ip", client_ip)
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-client-header", client_header)
+    ngx.req.set_header("X-Kong-" .. plugin_name .. "-client-cookie", client_cookie)    
+
+    
+    ngx.header["X-Kong-" .. plugin_name .. "-upstream"]=plugin_conf.upstream;    
+    ngx.header["X-Kong-" .. plugin_name .. "-limit-ip"]=limit_ip;
+    ngx.header["X-Kong-" .. plugin_name .. "-limit-header"]=limit_header;
+    ngx.header["X-Kong-" .. plugin_name .. "-limit-cookie"]=limit_cookie;
+
+    ngx.header["X-Kong-" .. plugin_name .. "-client-ip"]=client_ip;
+    ngx.header["X-Kong-" .. plugin_name .. "-client-header"]=client_header;
+    ngx.header["X-Kong-" .. plugin_name .. "-client-cookie"]=client_cookie;
+
   end    
   
 end --]]
