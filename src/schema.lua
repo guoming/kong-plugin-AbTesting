@@ -3,8 +3,10 @@
 return {
   no_consumer = false, -- this plugin is available on APIs as well as on Consumers,
   fields = {
-    -- Describe your plugin's configuration's schema here.
-    pattern = {type = "string", required = true},
+    -- Describe your plugin's configuration's schema here.    
+    cookie = {type = "string", required = false},    
+    header = {type = "string", required = false},    
+    ip = {type = "string", required = false},
     upstream = {type = "string", required = true}
   },
   self_check = function(schema, plugin_t, dao, is_updating)
